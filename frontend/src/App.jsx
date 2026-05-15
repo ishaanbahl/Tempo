@@ -1,122 +1,141 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import React, { useState } from 'react';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [messages, setMessages] = useState([
+    { id: 1, role: 'system', text: "SYSTEM_INITIALIZED..." },
+    { id: 2, role: 'ai', text: "Connection stable. Welcome to TEMPO. State your command." }
+  ]);
+  const [inputVal, setInputVal] = useState('');
+
+  const playlists = [
+    { id: '1', name: 'NIGHT_DRIVE_//', tracks: 42 },
+    { id: '2', name: 'GYM_PROTOCOL', tracks: 112 },
+    { id: '3', name: 'ACOUSTIC_ARCHIVE', tracks: 18 }
+  ];
+
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!inputVal.trim()) return;
+    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: inputVal }]);
+    setInputVal('');
+    
+    // Fake AI Response for structural testing
+    setTimeout(() => {
+      setMessages(prev => [...prev, { 
+        id: Date.now(), 
+        role: 'ai', 
+        text: "PROCESSING... Simulating function call [move_tracks]." 
+      }]);
+    }, 1000);
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', padding: '24px', gap: '24px' }}>
+      
+      {/* LEFT SIDEBAR - PLAYLISTS */}
+      <aside 
+        className="card-cyber cyber-chamfer"
+        style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+      >
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
+          <h3 style={{ color: 'var(--accent-secondary)' }}>DATABANKS</h3>
+          <p style={{ fontSize: '12px', color: 'var(--muted-fg)' }}>// CONNECTED: SPOTIFY_SECURE</p>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+
+        <div style={{ borderTop: '1px solid var(--border-color)', margin: '10px 0' }} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto' }}>
+          {playlists.map(p => (
+            <div 
+              key={p.id} 
+              className="cyber-chamfer-sm"
+              style={{ 
+                padding: '12px', 
+                border: '1px solid var(--border-color)', 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                backgroundColor: 'var(--bg-color)',
+                cursor: 'pointer'
+              }}
+            >
+              <span style={{ fontSize: '14px', color: 'var(--fg-color)' }}>{p.name}</span>
+              <span style={{ fontSize: '12px', color: 'var(--accent)' }}>[{p.tracks}]</span>
+            </div>
+          ))}
+        </div>
+        
+        <div style={{ marginTop: 'auto' }}>
+          <button className="btn-cyber cyber-chamfer-sm" style={{ width: '100%' }}>
+            SYNC DATA
+          </button>
+        </div>
+      </aside>
+
+      {/* RIGHT MAIN CHAT AREA */}
+      <main 
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}
+      >
+        {/* HERO HEADER */}
+        <header style={{ paddingBottom: '24px' }}>
+          <h1 
+            className="cyber-glitch-text" 
+            data-text="TEMPO // TERMINAL"
+            style={{ fontSize: '3rem', color: 'var(--fg-color)', textShadow: 'var(--neon-text-glow)' }}
+          >
+            TEMPO // TERMINAL
+          </h1>
+          <h3 style={{ color: 'var(--accent)', marginTop: '8px' }}>
+            <span className="animate-blink">_</span>AWAITING_INPUT
+          </h3>
+        </header>
+
+        {/* CHAT DISPLAY */}
+        <div 
+          className="card-cyber cyber-chamfer" 
+          style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          {messages.map(m => (
+            <div key={m.id} style={{ 
+                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '70%'
+              }}
+            >
+              <div style={{ 
+                fontSize: '12px', 
+                color: m.role === 'user' ? 'var(--accent-secondary)' : 'var(--accent-tertiary)',
+                marginBottom: '4px'
+              }}>
+                {m.role.toUpperCase()}
+              </div>
+              <div 
+                className="cyber-chamfer-sm"
+                style={{
+                  padding: '16px',
+                  backgroundColor: m.role === 'user' ? 'var(--bg-color)' : 'var(--muted-bg)',
+                  border: `1px solid ${m.role === 'user' ? 'var(--accent-secondary)' : 'var(--accent-tertiary)'}`,
+                  color: 'var(--fg-color)'
+                }}
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        {/* INPUT BOX */}
+        <form onSubmit={handleSend} className="input-cyber-wrapper">
+          <input 
+            type="text" 
+            className="input-cyber cyber-chamfer-sm"
+            placeholder="Execute protocol... (e.g. Move unliked songs from NIGHT_DRIVE to ACOUSTIC_ARCHIVE)"
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value)}
+          />
+        </form>
+      </main>
+
+    </div>
+  );
 }
 
-export default App
+export default App;
