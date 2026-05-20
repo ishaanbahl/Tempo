@@ -20,6 +20,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.cache
 
 # ---------- Editor directories and files ----------
 .vscode/*
