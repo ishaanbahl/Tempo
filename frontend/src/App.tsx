@@ -23,6 +23,7 @@ function App() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loadingTracks, setLoadingTracks] = useState<boolean>(false);
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [userName, setUserName] = useState<string | null>(null);
   const getToken = () => localStorage.getItem('spotify_token');
 
@@ -121,16 +122,54 @@ function App() {
       .catch(err => { console.error(err); setIsLoggingIn(false); });
   };
 
-  const handleSend = (e: SyntheticEvent) => {
+  const handleSend = async (e: SyntheticEvent) => {
     e.preventDefault();
-    if (!inputVal.trim()) return;
-    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: inputVal }]);
+    const userMessage = inputVal.trim();
+    if (!userMessage || isAiLoading) return;
+
+    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: userMessage }]);
     setInputVal('');
-    setTimeout(() => {
+    setIsAiLoading(true);
+
+    // Build conversation history for the backend (exclude system messages, map 'ai' → 'assistant')
+    const history = messages
+      .filter(m => m.role === 'user' || m.role === 'ai')
+      .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+
+    const token = getToken();
+    try {
+      const res = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          history,
+          playlists: playlists.map(p => ({ id: p.id, name: p.name })),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorMessages: Record<number, string> = {
+          401: "Your Spotify session has expired. Please disconnect and log in again.",
+          429: "Tempo is temporarily unavailable due to high demand. Please try again in a moment.",
+          500: "Sorry, Tempo ran into an issue and couldn't complete your request.",
+        };
+        const msg = errorMessages[res.status] ?? `Sorry, something went wrong (error ${res.status}).`;
+        setMessages(prev => [...prev, { id: Date.now(), role: 'ai', text: msg }]);
+        return;
+      }
+      const data = await res.json();
+      setMessages(prev => [...prev, { id: Date.now(), role: 'ai', text: data.reply }]);
+    } catch {
       setMessages(prev => [...prev, {
-        id: Date.now(), role: 'ai', text: "PROCESSING... Simulating function call [move_tracks]."
+        id: Date.now(), role: 'ai', text: "Tempo is unreachable. Please check that the backend is running."
       }]);
-    }, 1000);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const handleDisconnect = () => {
@@ -171,6 +210,7 @@ function App() {
             inputVal={inputVal}
             setInputVal={setInputVal}
             onSend={handleSend}
+            isLoading={isAiLoading}
           />
         )}
       </main>

@@ -59,7 +59,7 @@ Before you can manipulate playlists, you will need access to OpenAI and Spotify.
 Inside your `/backend` folder, create a file named `.env` and fill it with your credentials:
 
 ```bash
-OPENAI_API_KEY="your-openai-api-key"
+GEMINI_API_KEY="your-gemini-api-key"
 
 SPOTIPY_CLIENT_ID="your-spotify-client-id"
 SPOTIPY_CLIENT_SECRET="your-spotify-client-secret"

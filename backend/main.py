@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from routers import auth, playlists
+from routers import auth, playlists, chat
 
 load_dotenv()
 
@@ -20,3 +20,4 @@ app.add_middleware(
 # Register routers
 app.include_router(auth.router)
 app.include_router(playlists.router)
+app.include_router(chat.router)
