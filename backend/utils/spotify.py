@@ -24,9 +24,29 @@ def get_spotify_client(authorization: str) -> spotipy.Spotify:
 
 # --- Tool helpers used by the chat/LLM router ---
 
-def search_tracks(sp: spotipy.Spotify, query: str, limit: int = 10) -> list:
-    """Search Spotify for tracks. Returns tracks with uri, name, artists, album."""
-    results = sp.search(q=query, type="track", limit=limit)
+def search_tracks(
+    sp: spotipy.Spotify,
+    query: str = "",
+    track: str = "",
+    artist: str = "",
+    album: str = "",
+    limit: int = 10,
+) -> list:
+    """Search Spotify for tracks. Supports free-text query or specific field filters."""
+    # Build a Spotify field-filtered query if specific fields are provided
+    parts = []
+    if track:
+        parts.append(f"track:{track}")
+    if artist:
+        parts.append(f"artist:{artist}")
+    if album:
+        parts.append(f"album:{album}")
+
+    q = " ".join(parts) if parts else query
+    if not q:
+        return []
+
+    results = sp.search(q=q, type="track", limit=limit)
     tracks = []
     for item in results.get("tracks", {}).get("items", []):
         tracks.append({

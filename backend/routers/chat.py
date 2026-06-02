@@ -54,20 +54,36 @@ def summarize_history(gemini: genai.Client, old_contents: list[types.Content]) -
 TOOL = types.Tool(function_declarations=[
     types.FunctionDeclaration(
         name="search_tracks",
-        description="Search Spotify for tracks by name, artist, or keyword. Use this to find track URIs before adding them to a playlist.",
+        description=(
+            "Search Spotify for tracks to get their URIs. "
+            "Use specific fields (track, artist, album) for precise results, "
+            "or a free-text query for broader searches. "
+            "At least one of query, track, artist, or album must be provided."
+        ),
         parameters=types.Schema(
             type=types.Type.OBJECT,
             properties={
                 "query": types.Schema(
                     type=types.Type.STRING,
-                    description="Search query, e.g. 'God's Plan Drake' or 'artist:Drake'",
+                    description="Free-text search query. Use when you don't have exact details, e.g. 'chill rap 2024'.",
+                ),
+                "track": types.Schema(
+                    type=types.Type.STRING,
+                    description="Exact or partial track title to search for, e.g. 'Blinding Lights'.",
+                ),
+                "artist": types.Schema(
+                    type=types.Type.STRING,
+                    description="Artist name to filter by, e.g. 'The Weeknd'.",
+                ),
+                "album": types.Schema(
+                    type=types.Type.STRING,
+                    description="Album name to filter by, e.g. 'After Hours'.",
                 ),
                 "limit": types.Schema(
                     type=types.Type.INTEGER,
-                    description="Max number of results to return (1-50). Default is 10.",
+                    description="Max results to return (1-50). Default is 10.",
                 ),
             },
-            required=["query"],
         ),
     ),
     types.FunctionDeclaration(
