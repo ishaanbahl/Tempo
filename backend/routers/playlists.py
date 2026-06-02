@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Header
+from spotipy.exceptions import SpotifyException
 from utils.spotify import get_spotify_client
 
 router = APIRouter(prefix="/playlists", tags=["Playlists"])
@@ -33,8 +34,9 @@ def get_playlists(authorization: str = Header()):
                 "owner": item.get('owner', {}).get('display_name', 'Unknown')
             })
         return {"playlists": playlists}
+    except SpotifyException as e:
+        raise HTTPException(status_code=e.http_status or 400, detail=str(e))
     except Exception as e:
-        print(f"PLAYLIST ERROR: {type(e).__name__}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -44,31 +46,20 @@ def get_playlist_tracks(playlist_id: str, authorization: str = Header()):
     sp = get_spotify_client(authorization)
     try:
         print(f"DEBUG: Fetching tracks for playlist_id: {playlist_id}")
-        results = sp.playlist_tracks(playlist_id, limit=100)
-        
-        items = results.get('items', [])
-        print(f"DEBUG: Spotify returned {len(items)} items")
-        
-        if items and len(items) > 0:
-            print(f"DEBUG: First item keys: {items[0].keys()}")
-            if 'track' in items[0]:
-                print(f"DEBUG: 'track' found in first item")
-            else:
-                print(f"DEBUG: 'track' NOT found in first item. Data: {str(items[0])[:200]}...")
+        all_items = []
+        results = sp.playlist_items(playlist_id, limit=50)
+        while results:
+            all_items.extend(results.get('items', []))
+            results = sp.next(results) if results.get('next') else None
 
         tracks = []
-        for item in items:
-            # Match both possible Spotify response formats
-            track = item.get('track') or item.get('item')
-            
+        for item in all_items:
+            # spotipy 2.26+ uses "item" key; older responses used "track"
+            track = item.get('item') or item.get('track')
             if not track:
                 continue
-            
-            # Safely handle artists
-            artists_list = track.get('artists', [])
-            artists_str = ", ".join([a.get('name', 'Unknown') for a in artists_list])
-            
-            # Safely handle images
+
+            artists_str = ", ".join(a.get('name', 'Unknown') for a in track.get('artists', []))
             album = track.get('album', {})
             images = album.get('images', [])
             image_url = images[-1]['url'] if images else None
@@ -81,9 +72,9 @@ def get_playlist_tracks(playlist_id: str, authorization: str = Header()):
                 "duration_ms": track.get('duration_ms', 0),
                 "image": image_url
             })
-        
-        print(f"DEBUG: Successfully processed {len(tracks)} tracks")
+
         return {"tracks": tracks}
+    except SpotifyException as e:
+        raise HTTPException(status_code=e.http_status or 400, detail=str(e))
     except Exception as e:
-        print(f"TRACK FETCH ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))

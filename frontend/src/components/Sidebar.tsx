@@ -15,8 +15,7 @@ export const Sidebar = ({ playlists, loading, selectedId, userName, onPlaylistCl
     style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}
   >
     <div>
-      <h3 style={{ color: 'var(--accent-secondary)' }}>DATABANKS</h3>
-      <p style={{ fontSize: '12px', color: 'var(--muted-fg)' }}>// CONNECTED: SPOTIFY_SECURE</p>
+      <h3 style={{ color: 'var(--accent-secondary)' }}> // PLAYLISTS</h3>
     </div>
 
     <div style={{ borderTop: '1px solid var(--border-color)', margin: '10px 0' }} />

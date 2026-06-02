@@ -39,18 +39,20 @@ def search_tracks(sp: spotipy.Spotify, query: str, limit: int = 10) -> list:
 
 
 def get_playlist_tracks_tool(sp: spotipy.Spotify, playlist_id: str) -> list:
-    """Returns all tracks in a playlist with uri, name, and artists."""
-    results = sp.playlist_tracks(playlist_id, limit=100)
+    """Returns all tracks in a playlist with uri, name, and artists. Paginates automatically."""
     tracks = []
-    for item in results.get("items", []):
-        track = item.get("track")
-        if not track or not track.get("uri"):
-            continue
-        tracks.append({
-            "uri": track["uri"],
-            "name": track.get("name", "Unknown"),
-            "artists": ", ".join(a["name"] for a in track.get("artists", [])),
-        })
+    results = sp.playlist_items(playlist_id, limit=50)
+    while results:
+        for item in results.get("items", []):
+            track = item.get("item") or item.get("track")
+            if not track or not track.get("uri"):
+                continue
+            tracks.append({
+                "uri": track["uri"],
+                "name": track.get("name", "Unknown"),
+                "artists": ", ".join(a["name"] for a in track.get("artists", [])),
+            })
+        results = sp.next(results) if results.get("next") else None
     return tracks
 
 

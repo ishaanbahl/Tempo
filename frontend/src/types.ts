@@ -1,6 +1,6 @@
 export interface Message {
   id: number;
-  role: 'system' | 'ai' | 'user';
+  role: 'Tempo' | 'user';
   text: string;
 }
 

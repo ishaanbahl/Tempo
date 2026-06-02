@@ -1,4 +1,4 @@
-import { useState, SyntheticEvent, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ChatView } from './components/ChatView';
@@ -13,69 +13,99 @@ function App() {
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   const [messages, setMessages] = useState<Message[]>([
-    { id: 1, role: 'system', text: "SYSTEM_INITIALIZED..." },
-    { id: 2, role: 'ai', text: "Connection stable. Welcome to TEMPO. State your command." }
+    { id: 1, role: 'Tempo', text: "hey! I'm Tempo 🎧 your Spotify co-pilot. tell me what you want to do — move songs around, clean up a playlist, find something to vibe to... i got you." }
   ]);
-  const [inputVal, setInputVal] = useState<string>('');
 
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState<boolean>(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loadingTracks, setLoadingTracks] = useState<boolean>(false);
-  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [userName, setUserName] = useState<string | null>(null);
+
   const getToken = () => localStorage.getItem('spotify_token');
+  const getRefreshToken = () => localStorage.getItem('spotify_refresh_token');
+
+  const logout = () => {
+    localStorage.removeItem('spotify_token');
+    localStorage.removeItem('spotify_refresh_token');
+    setIsAuthenticated(false);
+    setPlaylists([]);
+    setSelectedPlaylist(null);
+  };
+
+  // Wraps fetch with automatic token refresh on 401.
+  // On successful refresh the original request is retried transparently.
+  // On refresh failure the user is logged out.
+  const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const makeRequest = (token: string) => fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers as Record<string, string>),
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    const token = getToken();
+    if (!token) { logout(); throw new Error('No token'); }
+
+    const res = await makeRequest(token);
+    if (res.status !== 401) return res;
+
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) { logout(); throw new Error('Session expired'); }
+
+    try {
+      const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!refreshRes.ok) throw new Error('Refresh failed');
+      const refreshData = await refreshRes.json();
+      localStorage.setItem('spotify_token', refreshData.access_token);
+      if (refreshData.refresh_token) {
+        localStorage.setItem('spotify_refresh_token', refreshData.refresh_token);
+      }
+      return makeRequest(refreshData.access_token);
+    } catch {
+      logout();
+      throw new Error('Session expired');
+    }
+  };
 
   const fetchUser = async () => {
-    const token = getToken();
-    if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetchWithAuth(`${API_URL}/auth/me`);
       if (res.ok) {
         const data = await res.json();
         setUserName(data.display_name);
       }
-    } catch (err) {
-      console.error("Failed to load user:", err);
-    }
+    } catch { /* fetchWithAuth already logged out on auth failure */ }
   };
 
   const fetchPlaylists = async () => {
-    const token = getToken();
-    if (!token) return;
-    setLoadingPlaylists(true);
+    const isInitialLoad = playlists.length === 0;
+    if (isInitialLoad) setLoadingPlaylists(true);
     try {
-      const res = await fetch(`${API_URL}/playlists`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetchWithAuth(`${API_URL}/playlists`);
       if (!res.ok) throw new Error('Failed to fetch playlists');
       const data = await res.json();
       setPlaylists(data.playlists);
-    } catch (err) {
-      console.error("Failed to load playlists:", err);
-    } finally {
-      setLoadingPlaylists(false);
+    } catch { /* silent */ } finally {
+      if (isInitialLoad) setLoadingPlaylists(false);
     }
   };
 
   const fetchTracks = async (playlist: Playlist) => {
-    const token = getToken();
-    if (!token) return;
     setSelectedPlaylist(playlist);
     setLoadingTracks(true);
     try {
-      const res = await fetch(`${API_URL}/playlists/${playlist.id}/tracks`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetchWithAuth(`${API_URL}/playlists/${playlist.id}/tracks`);
       if (!res.ok) throw new Error('Failed to fetch tracks');
       const data = await res.json();
       setTracks(data.tracks);
-    } catch (err) {
-      console.error("Failed to load tracks:", err);
-    } finally {
+    } catch { /* silent */ } finally {
       setLoadingTracks(false);
     }
   };
@@ -95,6 +125,9 @@ function App() {
         .then(data => {
           if (data.access_token) {
             localStorage.setItem('spotify_token', data.access_token);
+            if (data.refresh_token) {
+              localStorage.setItem('spotify_refresh_token', data.refresh_token);
+            }
             window.history.pushState({}, '', '/');
             setIsAuthenticated(true);
           }
@@ -122,63 +155,6 @@ function App() {
       .catch(err => { console.error(err); setIsLoggingIn(false); });
   };
 
-  const handleSend = async (e: SyntheticEvent) => {
-    e.preventDefault();
-    const userMessage = inputVal.trim();
-    if (!userMessage || isAiLoading) return;
-
-    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: userMessage }]);
-    setInputVal('');
-    setIsAiLoading(true);
-
-    // Build conversation history for the backend (exclude system messages, map 'ai' → 'assistant')
-    const history = messages
-      .filter(m => m.role === 'user' || m.role === 'ai')
-      .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
-
-    const token = getToken();
-    try {
-      const res = await fetch(`${API_URL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          history,
-          playlists: playlists.map(p => ({ id: p.id, name: p.name })),
-        }),
-      });
-
-      if (!res.ok) {
-        const errorMessages: Record<number, string> = {
-          401: "Your Spotify session has expired. Please disconnect and log in again.",
-          429: "Tempo is temporarily unavailable due to high demand. Please try again in a moment.",
-          500: "Sorry, Tempo ran into an issue and couldn't complete your request.",
-        };
-        const msg = errorMessages[res.status] ?? `Sorry, something went wrong (error ${res.status}).`;
-        setMessages(prev => [...prev, { id: Date.now(), role: 'ai', text: msg }]);
-        return;
-      }
-      const data = await res.json();
-      setMessages(prev => [...prev, { id: Date.now(), role: 'ai', text: data.reply }]);
-    } catch {
-      setMessages(prev => [...prev, {
-        id: Date.now(), role: 'ai', text: "Tempo is unreachable. Please check that the backend is running."
-      }]);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const handleDisconnect = () => {
-    localStorage.removeItem('spotify_token');
-    setIsAuthenticated(false);
-    setPlaylists([]);
-    setSelectedPlaylist(null);
-  };
-
   if (!isAuthenticated) {
     return <LoginView onLogin={handleLogin} isLoggingIn={isLoggingIn} />;
   }
@@ -191,26 +167,30 @@ function App() {
         selectedId={selectedPlaylist?.id}
         userName={userName}
         onPlaylistClick={fetchTracks}
-        onDisconnect={handleDisconnect}
+        onDisconnect={logout}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
-        <Header subtitle={selectedPlaylist ? `VIEWING: ${selectedPlaylist.name}` : undefined} />
+        <Header
+          subtitle={selectedPlaylist ? `VIEWING: ${selectedPlaylist.name}` : undefined}
+          onBack={selectedPlaylist ? () => { setSelectedPlaylist(null); setTracks([]); } : undefined}
+        />
 
         {selectedPlaylist ? (
           <PlaylistView
             playlist={selectedPlaylist}
             tracks={tracks}
             loading={loadingTracks}
-            onBack={() => { setSelectedPlaylist(null); setTracks([]); }}
           />
         ) : (
           <ChatView
             messages={messages}
-            inputVal={inputVal}
-            setInputVal={setInputVal}
-            onSend={handleSend}
-            isLoading={isAiLoading}
+            setMessages={setMessages}
+            playlists={playlists}
+            selectedPlaylist={selectedPlaylist}
+            fetchWithAuth={fetchWithAuth}
+            fetchPlaylists={fetchPlaylists}
+            fetchTracks={fetchTracks}
           />
         )}
       </main>

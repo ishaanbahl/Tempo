@@ -4,7 +4,6 @@ interface PlaylistViewProps {
   playlist: Playlist;
   tracks: Track[];
   loading: boolean;
-  onBack: () => void;
 }
 
 function formatDuration(ms: number): string {
@@ -13,20 +12,13 @@ function formatDuration(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export const PlaylistView = ({ playlist, tracks, loading, onBack }: PlaylistViewProps) => (
+export const PlaylistView = ({ playlist, tracks, loading }: PlaylistViewProps) => (
   <div 
     className="card-cyber cyber-chamfer" 
     style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}
   >
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div>
       <h3 style={{ color: 'var(--accent-secondary)' }}>{playlist.name} // {playlist.tracks} TRACKS</h3>
-      <button 
-        className="btn-cyber cyber-chamfer-sm" 
-        style={{ fontSize: '11px', padding: '6px 14px' }}
-        onClick={onBack}
-      >
-        ← BACK TO TERMINAL
-      </button>
     </div>
 
     <div style={{ borderTop: '1px solid var(--border-color)' }} />

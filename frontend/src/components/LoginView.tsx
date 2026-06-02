@@ -7,10 +7,10 @@ export const LoginView = ({ onLogin, isLoggingIn }: LoginViewProps) => (
   <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px' }}>
     <h1 
       className="cyber-glitch-text" 
-      data-text="TEMPO // TERMINAL"
+      data-text="WELCOME TO TEMPO"
       style={{ fontSize: '4rem', color: 'var(--fg-color)', textShadow: 'var(--neon-text-glow)' }}
     >
-      TEMPO // TERMINAL
+      WELCOME TO TEMPO
     </h1>
     <p style={{ color: 'var(--muted-fg)', fontFamily: 'var(--font-accent)', letterSpacing: '2px' }}>
       SECURE CONNECTION REQUIRED
