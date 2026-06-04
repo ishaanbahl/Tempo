@@ -15,7 +15,7 @@ export const Header = ({ subtitle, onBack }: HeaderProps) => (
       </h1>
       <h3 style={{ color: 'var(--accent)', marginTop: '8px' }}>
         <span className="animate-blink">_</span>
-        {subtitle || 'AWAITING_INPUT'}
+        {subtitle || 'CHAT WINDOW'}
       </h3>
     </div>
     {onBack && (

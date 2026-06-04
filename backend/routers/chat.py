@@ -9,9 +9,20 @@ from utils.spotify import (
     get_playlist_tracks_tool,
     add_tracks_to_playlist,
     remove_tracks_from_playlist,
+    create_playlist,
+    delete_playlist,
+    rename_playlist,
+    reorder_playlist_tracks,
 )
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+# Models tried in order when a quota limit or unavailability is hit on the current one
+FALLBACK_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+]
 
 # Gemini 2.5 Flash has a 1,048,576 token context window.
 SUMMARIZE_THRESHOLD_TOKENS = 800_000
@@ -138,6 +149,87 @@ TOOL = types.Tool(function_declarations=[
             required=["playlist_id", "track_uris"],
         ),
     ),
+    types.FunctionDeclaration(
+        name="create_playlist",
+        description="Create a new empty Spotify playlist for the user.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "name": types.Schema(
+                    type=types.Type.STRING,
+                    description="Name for the new playlist.",
+                ),
+                "description": types.Schema(
+                    type=types.Type.STRING,
+                    description="Optional short description for the playlist.",
+                ),
+                "public": types.Schema(
+                    type=types.Type.BOOLEAN,
+                    description="Whether the playlist is public. Defaults to False (private).",
+                ),
+            },
+            required=["name"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="delete_playlist",
+        description=(
+            "Remove (delete) a playlist from the user's Spotify library. "
+            "Always confirm with the user before calling this — it cannot be undone."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "playlist_id": types.Schema(
+                    type=types.Type.STRING,
+                    description="The Spotify playlist ID to delete.",
+                ),
+            },
+            required=["playlist_id"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="rename_playlist",
+        description="Rename an existing playlist.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "playlist_id": types.Schema(
+                    type=types.Type.STRING,
+                    description="The Spotify playlist ID to rename.",
+                ),
+                "new_name": types.Schema(
+                    type=types.Type.STRING,
+                    description="The new name for the playlist.",
+                ),
+            },
+            required=["playlist_id", "new_name"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="reorder_playlist_tracks",
+        description=(
+            "Reorder the tracks in a playlist by providing the complete new order as a list of track URIs. "
+            "Always call get_playlist_tracks first to get the current URIs, then decide the new order "
+            "(e.g. alphabetically by name, by artist, move one song to a different position), "
+            "then call this with the full reordered list."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "playlist_id": types.Schema(
+                    type=types.Type.STRING,
+                    description="The Spotify playlist ID to reorder.",
+                ),
+                "track_uris": types.Schema(
+                    type=types.Type.ARRAY,
+                    items=types.Schema(type=types.Type.STRING),
+                    description="Complete ordered list of all track URIs defining the new playlist order.",
+                ),
+            },
+            required=["playlist_id", "track_uris"],
+        ),
+    ),
 ])
 
 
@@ -167,6 +259,14 @@ def execute_tool(sp, name: str, args: dict):
         return add_tracks_to_playlist(sp, **args)
     elif name == "remove_tracks_from_playlist":
         return remove_tracks_from_playlist(sp, **args)
+    elif name == "create_playlist":
+        return create_playlist(sp, **args)
+    elif name == "delete_playlist":
+        return delete_playlist(sp, **args)
+    elif name == "rename_playlist":
+        return rename_playlist(sp, **args)
+    elif name == "reorder_playlist_tracks":
+        return reorder_playlist_tracks(sp, **args)
     else:
         return {"error": f"Unknown tool: {name}"}
 
@@ -192,10 +292,14 @@ def chat(req: ChatRequest, authorization: str = Header()):
 
 ## What you can do
 You have tools to read and edit the user's Spotify playlists:
-- Search for tracks by name or artist
+- Search for tracks by name, artist, or album
 - Read the contents of any playlist
 - Add tracks to a playlist
 - Remove tracks from a playlist
+- Create a brand new empty playlist
+- Delete (unfollow) a playlist from the user's library
+- Rename an existing playlist
+- Reorder the tracks inside a playlist (sort alphabetically, move a song, etc.)
 
 The user's current playlists:
 {playlist_lines if playlist_lines else "No playlists loaded yet — tell them to make sure they're connected."}
@@ -205,7 +309,25 @@ When the user asks you to move songs:
 1. Use get_playlist_tracks to read the source playlist
 2. Identify the matching tracks by name and artist
 3. Add them to the destination, then remove from the source
-4. Confirm casually — e.g. "Done! Moved 4 tracks over." not a formal report
+4. Confirm casually — e.g. "done! moved 4 tracks over." not a formal report
+
+When the user asks you to reorder a playlist:
+1. Use get_playlist_tracks to get the current track list and their URIs
+2. Decide the new order based on the request (sort alphabetically by name, by artist, move one song to front/back/position X, etc.)
+3. Call reorder_playlist_tracks with the complete reordered list of all URIs
+4. Confirm — e.g. "sorted! 23 tracks now in alphabetical order."
+
+When the user asks you to rename a playlist:
+- Use rename_playlist with the playlist's ID and the new name
+- Confirm casually — e.g. "done, renamed to Late Night 🌙"
+
+When the user asks you to create a playlist:
+- Use create_playlist with just the name (and an optional description)
+- Confirm and offer to add songs to it if relevant
+
+When the user asks you to delete a playlist:
+- Always confirm first before calling delete_playlist — e.g. "you sure? deleting [name] can't be undone"
+- Only call the tool after the user explicitly confirms
 
 ## Classifying by genre, mood, or language
 Spotify's genre/audio feature APIs are gone, so use your own music knowledge.
@@ -242,15 +364,27 @@ You're a companion first, a tool second."""
     )
 
     playlists_modified = False
+    sidebar_refresh = False  # only True for create/rename — forces fetchPlaylists()
     mutations: dict[str, int] = {}
+
+    def generate_with_fallback(contents, config):
+        """Try each model in FALLBACK_MODELS until one succeeds or all are exhausted."""
+        last_err = None
+        for model in FALLBACK_MODELS:
+            try:
+                return gemini.models.generate_content(
+                    model=model, contents=contents, config=config
+                )
+            except Exception as e:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "404" in str(e) or "NOT_FOUND" in str(e):
+                    last_err = e
+                    continue  # quota hit or model unavailable — try next
+                raise  # any other error surfaces immediately
+        raise HTTPException(status_code=429, detail="Sorry, Tempo is temporarily unavailable — all model quotas are exhausted. Try again later!") from last_err
 
     # Tool-calling loop — keeps running until Gemini stops requesting tool calls
     for _ in range(10):
-        response = gemini.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents,
-            config=config,
-        )
+        response = generate_with_fallback(contents, config)
 
         candidate = response.candidates[0]
         function_call_parts = [p for p in candidate.content.parts if p.function_call]
@@ -258,7 +392,12 @@ You're a companion first, a tool second."""
         if not function_call_parts:
             text = "".join(p.text for p in candidate.content.parts if p.text)
             mutation_list = [{"playlist_id": pid, "delta": delta} for pid, delta in mutations.items()]
-            return {"reply": text, "playlists_modified": playlists_modified, "mutations": mutation_list}
+            return {
+                "reply": text,
+                "playlists_modified": playlists_modified,
+                "sidebar_refresh": sidebar_refresh,
+                "mutations": mutation_list,
+            }
 
         # Add model's turn (containing the function calls) to history
         contents.append(candidate.content)
@@ -281,6 +420,11 @@ You're a companion first, a tool second."""
                 playlists_modified = True
                 pid = args.get("playlist_id", "")
                 mutations[pid] = mutations.get(pid, 0) - len(args.get("track_uris", []))
+            elif fc.name in ("create_playlist", "rename_playlist", "delete_playlist"):
+                playlists_modified = True
+                sidebar_refresh = True  # structural change — must refresh sidebar
+            elif fc.name == "reorder_playlist_tracks":
+                playlists_modified = True  # refresh track view only
 
             fn_response_parts.append(
                 types.Part.from_function_response(name=fc.name, response={"result": result})

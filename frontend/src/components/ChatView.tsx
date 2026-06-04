@@ -68,10 +68,16 @@ export const ChatView = ({ messages, setMessages, playlists, selectedPlaylist, f
         if (data.mutations?.length > 0) {
           applyPlaylistDeltas(data.mutations);
         }
-        setTimeout(() => {
-          fetchPlaylists();
-          if (selectedPlaylist) fetchTracks(selectedPlaylist);
-        }, 800);
+        // Only re-fetch the sidebar for structural changes (new/renamed playlist).
+        // For add/remove the delta already updated the count — calling fetchPlaylists()
+        // would overwrite it with stale data before Spotify's cache has propagated.
+        if (data.sidebar_refresh) {
+          setTimeout(() => fetchPlaylists(), 1500);
+        }
+        // Always refresh the open track view so the new order/contents are visible
+        if (selectedPlaylist) {
+          setTimeout(() => fetchTracks(selectedPlaylist), 800);
+        }
       }
     } catch {
       setMessages(prev => [...prev, {
