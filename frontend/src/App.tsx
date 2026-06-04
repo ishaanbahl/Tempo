@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ChatView } from './components/ChatView';
@@ -21,6 +21,10 @@ function App() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loadingTracks, setLoadingTracks] = useState<boolean>(false);
+  const [trackCache, setTrackCache] = useState<Record<string, Track[]>>({});
+  const prefetchingRef = useRef<Set<string>>(new Set());
+  // Incremented on each fetchTracks call so stale async pages don't update state
+  const fetchIdRef = useRef(0);
   const [userName, setUserName] = useState<string | null>(null);
 
   const getToken = () => localStorage.getItem('spotify_token');
@@ -97,16 +101,75 @@ function App() {
     }
   };
 
+  const applyPlaylistDeltas = (mutations: { playlist_id: string; delta: number }[]) => {
+    setPlaylists(prev => prev.map(p => {
+      const mutation = mutations.find(m => m.playlist_id === p.id);
+      return mutation ? { ...p, tracks: Math.max(0, p.tracks + mutation.delta) } : p;
+    }));
+    setTrackCache(prev => {
+      const next = { ...prev };
+      mutations.forEach(m => { delete next[m.playlist_id]; });
+      return next;
+    });
+  };
+
   const fetchTracks = async (playlist: Playlist) => {
     setSelectedPlaylist(playlist);
+
+    if (trackCache[playlist.id]) {
+      setTracks(trackCache[playlist.id]);
+      // Silently refresh cache only — never call setTracks here to avoid
+      // overwriting the display if the user navigates to a different playlist
+      fetchWithAuth(`${API_URL}/playlists/${playlist.id}/tracks`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data) setTrackCache(prev => ({ ...prev, [playlist.id]: data.tracks }));
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // Assign a fetch ID so stale pages from a previous load don't update state
+    const myId = ++fetchIdRef.current;
     setLoadingTracks(true);
-    try {
-      const res = await fetchWithAuth(`${API_URL}/playlists/${playlist.id}/tracks`);
-      if (!res.ok) throw new Error('Failed to fetch tracks');
-      const data = await res.json();
-      setTracks(data.tracks);
-    } catch { /* silent */ } finally {
+    setTracks([]);
+
+    let accumulated: Track[] = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      if (fetchIdRef.current !== myId) return; // user navigated away
+      try {
+        const res = await fetchWithAuth(`${API_URL}/playlists/${playlist.id}/tracks?offset=${offset}`);
+        if (!res.ok || fetchIdRef.current !== myId) return;
+        const data = await res.json();
+        accumulated = [...accumulated, ...data.tracks];
+        setTracks([...accumulated]);
+        if (offset === 0) setLoadingTracks(false); // first page ready — hide spinner
+        hasMore = data.has_more;
+        offset += 50;
+      } catch { break; }
+    }
+
+    if (fetchIdRef.current === myId) {
       setLoadingTracks(false);
+      setTrackCache(prev => ({ ...prev, [playlist.id]: accumulated }));
+    }
+  };
+
+  // Fire-and-forget prefetch triggered on hover — avoids duplicate in-flight requests
+  const prefetchTracks = async (playlist: Playlist) => {
+    if (trackCache[playlist.id] || prefetchingRef.current.has(playlist.id)) return;
+    prefetchingRef.current.add(playlist.id);
+    try {
+      // Only prefetch first page so hover doesn't trigger heavy multi-page loads
+      const res = await fetchWithAuth(`${API_URL}/playlists/${playlist.id}/tracks`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setTrackCache(prev => ({ ...prev, [playlist.id]: data.tracks }));
+    } catch { /* silent */ } finally {
+      prefetchingRef.current.delete(playlist.id);
     }
   };
 
@@ -167,13 +230,14 @@ function App() {
         selectedId={selectedPlaylist?.id}
         userName={userName}
         onPlaylistClick={fetchTracks}
+        onPlaylistHover={prefetchTracks}
         onDisconnect={logout}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
         <Header
           subtitle={selectedPlaylist ? `VIEWING: ${selectedPlaylist.name}` : undefined}
-          onBack={selectedPlaylist ? () => { setSelectedPlaylist(null); setTracks([]); } : undefined}
+          onBack={selectedPlaylist ? () => { fetchIdRef.current++; setSelectedPlaylist(null); setTracks([]); } : undefined}
         />
 
         {selectedPlaylist ? (
@@ -191,6 +255,7 @@ function App() {
             fetchWithAuth={fetchWithAuth}
             fetchPlaylists={fetchPlaylists}
             fetchTracks={fetchTracks}
+            applyPlaylistDeltas={applyPlaylistDeltas}
           />
         )}
       </main>

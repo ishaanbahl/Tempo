@@ -241,8 +241,8 @@ You're a companion first, a tool second."""
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
 
-    MUTATING_TOOLS = {"add_tracks_to_playlist", "remove_tracks_from_playlist"}
     playlists_modified = False
+    mutations: dict[str, int] = {}
 
     # Tool-calling loop — keeps running until Gemini stops requesting tool calls
     for _ in range(10):
@@ -257,7 +257,8 @@ You're a companion first, a tool second."""
 
         if not function_call_parts:
             text = "".join(p.text for p in candidate.content.parts if p.text)
-            return {"reply": text, "playlists_modified": playlists_modified}
+            mutation_list = [{"playlist_id": pid, "delta": delta} for pid, delta in mutations.items()]
+            return {"reply": text, "playlists_modified": playlists_modified, "mutations": mutation_list}
 
         # Add model's turn (containing the function calls) to history
         contents.append(candidate.content)
@@ -272,8 +273,14 @@ You're a companion first, a tool second."""
             except Exception as e:
                 result = {"error": str(e)}
 
-            if fc.name in MUTATING_TOOLS:
+            if fc.name == "add_tracks_to_playlist":
                 playlists_modified = True
+                pid = args.get("playlist_id", "")
+                mutations[pid] = mutations.get(pid, 0) + len(args.get("track_uris", []))
+            elif fc.name == "remove_tracks_from_playlist":
+                playlists_modified = True
+                pid = args.get("playlist_id", "")
+                mutations[pid] = mutations.get(pid, 0) - len(args.get("track_uris", []))
 
             fn_response_parts.append(
                 types.Part.from_function_response(name=fc.name, response={"result": result})

@@ -244,7 +244,7 @@
   /* Tracks Grid Layout */
   .tracks-grid {
     display: grid;
-    grid-template-columns: [index] 32px [title] 4fr [artist] 3fr [duration] 60px;
+    grid-template-columns: [index] 44px [title] 4fr [artist] 3fr [duration] 60px;
     gap: 8px;
     padding: 0;
   }

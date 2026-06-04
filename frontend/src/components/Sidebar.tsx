@@ -6,10 +6,11 @@ interface SidebarProps {
   selectedId: string | undefined;
   userName: string | null;
   onPlaylistClick: (p: Playlist) => void;
+  onPlaylistHover: (p: Playlist) => void;
   onDisconnect: () => void;
 }
 
-export const Sidebar = ({ playlists, loading, selectedId, userName, onPlaylistClick, onDisconnect }: SidebarProps) => (
+export const Sidebar = ({ playlists, loading, selectedId, userName, onPlaylistClick, onPlaylistHover, onDisconnect }: SidebarProps) => (
   <aside
     className="card-cyber cyber-chamfer"
     style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}
@@ -23,7 +24,7 @@ export const Sidebar = ({ playlists, loading, selectedId, userName, onPlaylistCl
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
       {loading ? (
         <div style={{ color: 'var(--accent)', fontSize: '13px', padding: '12px', textAlign: 'center' }}>
-          <span className="animate-blink">_</span> LOADING DATABANKS...
+          <span className="animate-blink">_</span> LOADING...
         </div>
       ) : playlists.length === 0 ? (
         <div style={{ color: 'var(--muted-fg)', fontSize: '13px', padding: '12px', textAlign: 'center' }}>
@@ -35,6 +36,7 @@ export const Sidebar = ({ playlists, loading, selectedId, userName, onPlaylistCl
             key={p.id}
             className={`cyber-chamfer-sm playlist-item ${selectedId === p.id ? 'active' : ''}`}
             onClick={() => onPlaylistClick(p)}
+            onMouseEnter={() => onPlaylistHover(p)}
             style={{
               padding: '12px',
               border: `1px solid ${selectedId === p.id ? 'var(--accent)' : 'var(--border-color)'}`,

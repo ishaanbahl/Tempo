@@ -3,6 +3,11 @@ import { Message, Playlist } from '../types';
 
 const API_URL = 'http://127.0.0.1:8000';
 
+interface Mutation {
+  playlist_id: string;
+  delta: number;
+}
+
 interface ChatViewProps {
   messages: Message[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
@@ -11,9 +16,10 @@ interface ChatViewProps {
   fetchWithAuth: (url: string, options?: RequestInit) => Promise<Response>;
   fetchPlaylists: () => void;
   fetchTracks: (playlist: Playlist) => void;
+  applyPlaylistDeltas: (mutations: Mutation[]) => void;
 }
 
-export const ChatView = ({ messages, setMessages, playlists, selectedPlaylist, fetchWithAuth, fetchPlaylists, fetchTracks }: ChatViewProps) => {
+export const ChatView = ({ messages, setMessages, playlists, selectedPlaylist, fetchWithAuth, fetchPlaylists, fetchTracks, applyPlaylistDeltas }: ChatViewProps) => {
   const [inputVal, setInputVal] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -59,6 +65,9 @@ export const ChatView = ({ messages, setMessages, playlists, selectedPlaylist, f
       const data = await res.json();
       setMessages(prev => [...prev, { id: Date.now(), role: 'Tempo', text: data.reply }]);
       if (data.playlists_modified) {
+        if (data.mutations?.length > 0) {
+          applyPlaylistDeltas(data.mutations);
+        }
         setTimeout(() => {
           fetchPlaylists();
           if (selectedPlaylist) fetchTracks(selectedPlaylist);

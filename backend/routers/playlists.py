@@ -41,20 +41,16 @@ def get_playlists(authorization: str = Header()):
 
 
 @router.get("/{playlist_id}/tracks")
-def get_playlist_tracks(playlist_id: str, authorization: str = Header()):
-    """Fetches all tracks for a given playlist."""
+def get_playlist_tracks(playlist_id: str, offset: int = 0, authorization: str = Header()):
+    """Fetches one page (50 tracks) of a playlist. Returns has_more for pagination."""
     sp = get_spotify_client(authorization)
     try:
-        print(f"DEBUG: Fetching tracks for playlist_id: {playlist_id}")
-        all_items = []
-        results = sp.playlist_items(playlist_id, limit=50)
-        while results:
-            all_items.extend(results.get('items', []))
-            results = sp.next(results) if results.get('next') else None
+        results = sp.playlist_items(playlist_id, limit=50, offset=offset)
+        items = results.get('items', [])
+        has_more = results.get('next') is not None
 
         tracks = []
-        for item in all_items:
-            # spotipy 2.26+ uses "item" key; older responses used "track"
+        for item in items:
             track = item.get('item') or item.get('track')
             if not track:
                 continue
@@ -73,7 +69,7 @@ def get_playlist_tracks(playlist_id: str, authorization: str = Header()):
                 "image": image_url
             })
 
-        return {"tracks": tracks}
+        return {"tracks": tracks, "has_more": has_more, "offset": offset}
     except SpotifyException as e:
         raise HTTPException(status_code=e.http_status or 400, detail=str(e))
     except Exception as e:
