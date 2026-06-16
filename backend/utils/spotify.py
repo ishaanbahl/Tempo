@@ -1,16 +1,20 @@
 from fastapi import HTTPException
 from spotipy.oauth2 import SpotifyOAuth
+from spotipy.cache_handler import MemoryCacheHandler
 import spotipy
 import os
 
 
 def get_spotify_oauth() -> SpotifyOAuth:
-    """Creates a SpotifyOAuth instance using environment variables."""
+    """Creates a SpotifyOAuth instance using environment variables.
+    MemoryCacheHandler prevents spotipy from writing a .cache file to disk,
+    which would fail on ephemeral Cloud Run containers."""
     return SpotifyOAuth(
         client_id=os.getenv("SPOTIPY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
         redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI", "http://127.0.0.1:5173/callback"),
-        scope="playlist-modify-public playlist-modify-private user-library-read playlist-read-private"
+        scope="playlist-modify-public playlist-modify-private user-library-read playlist-read-private",
+        cache_handler=MemoryCacheHandler(),
     )
 
 
