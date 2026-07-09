@@ -4,7 +4,27 @@ interface LoginViewProps {
 }
 
 export const LoginView = ({ onLogin, isLoggingIn }: LoginViewProps) => (
-  <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px' }}>
+  <div style={{ display: 'flex', height: '100vh', width: '100vw', flexDirection: 'column' }}>
+    <div
+      className="login-banner cyber-chamfer-sm"
+      style={{
+        margin: '24px 24px 0',
+        padding: '14px 20px',
+        background: 'var(--muted-bg)',
+        border: '1px solid var(--accent-tertiary)',
+        color: 'var(--fg-color)',
+        fontFamily: 'var(--font-accent)',
+        fontSize: '0.85rem',
+        letterSpacing: '1px',
+        lineHeight: 1.5,
+        textAlign: 'center',
+        boxShadow: '0 0 8px rgba(0, 212, 255, 0.2)',
+      }}
+    >
+      Due to Spotify&apos;s developer related changes, you will be unable to log in unless specifically authenticated by the owner of this site.
+    </div>
+
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px' }}>
     <h1 
       className="cyber-glitch-text" 
       data-text="WELCOME TO TEMPO"
@@ -23,5 +43,6 @@ export const LoginView = ({ onLogin, isLoggingIn }: LoginViewProps) => (
     >
       {isLoggingIn ? "ESTABLISHING CONNECTION..." : "CONNECT TO SPOTIFY"}
     </button>
+    </div>
   </div>
 );
