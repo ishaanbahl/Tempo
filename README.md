@@ -1,8 +1,9 @@
 # Tempo 🎵
 
 Tempo is an AI-powered conversational interface that allows you to manage, curate, and manipulate your music playlists using natural language. 
+Try it yourself here: https://ishaanbahl-tempo.vercel.app/
 
-By leveraging cutting-edge LLMs (Function Calling) and the Spotify Web API, you can simply type commands like *"Move all acoustic songs from Playlist A to Playlist B"* and Tempo will handle everything securely behind the scenes.
+By using cutting-edge LLMs Function Calling and the Spotify Web API, you can simply type commands like *"Move all hiphop songs from Playlist A to Playlist B"* and Tempo will handle everything securely behind the scenes.
 
 ## 🛠️ Technology Stack
 - **Frontend**: React.js powered by Vite (for a lightning-fast development experience) and Vanilla CSS for a premium, custom user interface.
